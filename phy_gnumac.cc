@@ -19,19 +19,18 @@
 
 #include "config.h"
 
-#include "phy_sensor.h"
+#include "phy_gnumac.h"
 #include "devicetracker.h"
 #include "endian_magic.h"
 #include "macaddr.h"
 #include "kis_httpd_registry.h"
 #include "manuf.h"
 #include "messagebus.h"
-#include "phy_meter.h"
 
-kis_sensor_phy::kis_sensor_phy(int in_phyid) :
+Kis_GNUMAC_Phy::Kis_GNUMAC_Phy(int in_phyid) :
     kis_phy_handler(in_phyid) {
 
-    set_phy_name("RFSENSOR");
+    set_phy_name("Gnumac");
 
     packetchain =
         Globalreg::fetch_mandatory_global_as<packet_chain>();
@@ -47,136 +46,128 @@ kis_sensor_phy::kis_sensor_phy(int in_phyid) :
     pack_comp_meta =
         packetchain->register_packet_component("METABLOB");
 
-    sensor_holder_id =
-        Globalreg::globalreg->entrytracker->register_field("sensor.device", 
+    gnumac_holder_id =
+        Globalreg::globalreg->entrytracker->register_field("gnumac.device", 
                 tracker_element_factory<tracker_element_map>(),
                 "rtl_433 device");
 
-    sensor_common_id =
-        Globalreg::globalreg->entrytracker->register_field("sensor.device.common",
-                tracker_element_factory<sensor_tracked_common>(),
-                "Common sensor device info");
+    gnumac_common_id =
+        Globalreg::globalreg->entrytracker->register_field("gnumac.device.common",
+                tracker_element_factory<gnumac_tracked_common>(),
+                "Common RTL433 device info");
 
-    sensor_thermometer_id =
-        Globalreg::globalreg->entrytracker->register_field("sensor.device.thermometer",
-                tracker_element_factory<sensor_tracked_thermometer>(),
-                "sensor - thermometer");
+    gnumac_thermometer_id =
+        Globalreg::globalreg->entrytracker->register_field("gnumac.device.thermometer",
+                tracker_element_factory<gnumac_tracked_thermometer>(),
+                "RTL433 thermometer");
 
-    sensor_tpms_id =
-        Globalreg::globalreg->entrytracker->register_field("sensor.device.tpms",
-                tracker_element_factory<sensor_tracked_tpms>(),
-                "sensor - TPMS tire pressure");
+    gnumac_tpms_id =
+        Globalreg::globalreg->entrytracker->register_field("gnumac.device.tpms",
+                tracker_element_factory<gnumac_tracked_tpms>(),
+                "RTL433 TPMS tire pressure");
     
-    sensor_weatherstation_id =
-        Globalreg::globalreg->entrytracker->register_field("sensor.device.weatherstation",
-                tracker_element_factory<sensor_tracked_weatherstation>(),
-                "sensor - weather station");
+    gnumac_weatherstation_id =
+        Globalreg::globalreg->entrytracker->register_field("gnumac.device.weatherstation",
+                tracker_element_factory<gnumac_tracked_weatherstation>(),
+                "RTL433 weather station");
 
-    sensor_switch_id =
-        Globalreg::globalreg->entrytracker->register_field("sensor.device.switch",
-                tracker_element_factory<sensor_tracked_switch>(),
-                "sensor - power switch");
+    gnumac_switch_id =
+        Globalreg::globalreg->entrytracker->register_field("gnumac.device.switch",
+                tracker_element_factory<gnumac_tracked_switch>(),
+                "RTL433 power switch");
 
-    sensor_insteon_id =
-        Globalreg::globalreg->entrytracker->register_field("sensor.device.insteon",
-                tracker_element_factory<sensor_tracked_insteon>(),
-                "sensor - Insteon Device");
+    gnumac_insteon_id =
+        Globalreg::globalreg->entrytracker->register_field("gnumac.device.insteon",
+                tracker_element_factory<gnumac_tracked_insteon>(),
+                "RTL433 Insteon Device");
 
-    sensor_lightning_id =
-        Globalreg::globalreg->entrytracker->register_field("sensor.device.lightningsensor",
-                tracker_element_factory<sensor_tracked_lightningsensor>(),
-                "sensor - lightning sensor");
-
-    sensor_moisture_id =
-        Globalreg::globalreg->entrytracker->register_field("sensor.device.moisturesensor",
-                tracker_element_factory<sensor_tracked_moisture>(),
-                "sensor - moisture");
+    gnumac_lightning_id =
+        Globalreg::globalreg->entrytracker->register_field("gnumac.device.lightningsensor",
+                tracker_element_factory<gnumac_tracked_lightningsensor>(),
+                "RTL433 lightning sensor");
 
     // Make the manuf string
-    sensor_manuf = Globalreg::globalreg->manufdb->make_manuf("RF Sensor");
+    rtl_manuf = Globalreg::globalreg->manufdb->make_manuf("RTL433");
 
     // Register js module for UI
     auto httpregistry =
         Globalreg::fetch_mandatory_global_as<kis_httpd_registry>();
-    httpregistry->register_js_module("kismet_ui_sensor", "js/kismet.ui.sensor.js");
+    //httpregistry->register_js_module("kismet_ui_gnumac", "js/kismet.ui.gnumac.js");
 
-	packetchain->register_handler(&packet_handler, this, CHAINPOS_CLASSIFIER, -100);
-
-    track_last_record = 
-        Globalreg::globalreg->kismet_config->fetch_opt_bool("rtl433_track_last", false);
+	packetchain->register_handler(&PacketHandler, this, CHAINPOS_CLASSIFIER, -100);
 }
 
-kis_sensor_phy::~kis_sensor_phy() {
-    packetchain->remove_handler(&packet_handler, CHAINPOS_CLASSIFIER);
+Kis_GNUMAC_Phy::~Kis_GNUMAC_Phy() {
+    packetchain->remove_handler(&PacketHandler, CHAINPOS_CLASSIFIER);
 }
 
-double kis_sensor_phy::f_to_c(double f) {
+double Kis_GNUMAC_Phy::f_to_c(double f) {
     return (f - 32) / (double) 1.8f;
 }
 
-mac_addr kis_sensor_phy::json_to_mac(nlohmann::json json) {
+mac_addr Kis_GNUMAC_Phy::json_to_mac(nlohmann::json json) {
     // Derive a mac addr from the model and device id data
     //
     // We turn the model string into 4 bytes using the adler32 checksum,
     // then we use the model as a (potentially) 16bit int
     //
     // Finally we set the locally assigned bit on the first octet
-    
 
-    uint8_t bytes[6];
-    uint16_t *model = (uint16_t *) bytes;
-    uint32_t *checksum = (uint32_t *) (bytes + 2);
+    // uint8_t bytes[6];
+    // uint16_t *model = (uint16_t *) bytes;
+    // uint32_t *checksum = (uint32_t *) (bytes + 2);
 
-    memset(bytes, 0, 6);
+    // memset(bytes, 0, 6);
 
-    std::string smodel = "unk";
+    // std::string smodel = "unk";
 
-    try {
-        smodel = json["model"].get<std::string>();
-    } catch (...) { }
+    // try {
+    //     smodel = json["model"].get<std::string>();
+    // } catch (...) { }
 
-    *checksum = adler32_checksum(smodel.c_str(), smodel.length());
+    // *checksum = adler32_checksum(smodel.c_str(), smodel.length());
 
-    bool set_model = false;
+    // bool set_model = false;
 
-    auto idmem = json["id"];
-    if (idmem.is_number()) {
-        *model = kis_hton16((uint16_t) idmem.get<unsigned int>());
-        set_model = true;
-    } else if (idmem.is_string()) {
-        smodel = munge_to_printable(idmem.get<std::string>());
-        *checksum = adler32_checksum(smodel);
-        *model = kis_hton16((uint16_t) *checksum);
-        set_model = true;
-    }
+    // auto idmem = json["id"];
+    // if (idmem.is_number()) {
+    //     *model = kis_hton16((uint16_t) idmem.get<unsigned int>());
+    //     set_model = true;
+    // } else if (idmem.is_string()) {
+    //     smodel = munge_to_printable(idmem.get<std::string>());
+    //     *checksum = adler32_checksum(smodel);
+    //     *model = kis_hton16((uint16_t) *checksum);
+    //     set_model = true;
+    // }
 
-    auto fromid = json["from_id"];
-    if (fromid.is_string()) {
-        smodel = munge_to_printable(fromid.get<std::string>());
-        *checksum = adler32_checksum(smodel);
-        *model = kis_hton16((uint16_t) *checksum);
-        set_model = true;
-    }
+    // auto fromid = json["from_id"];
+    // if (fromid.is_string()) {
+    //     smodel = munge_to_printable(fromid.get<std::string>());
+    //     *checksum = adler32_checksum(smodel);
+    //     *model = kis_hton16((uint16_t) *checksum);
+    //     set_model = true;
+    // }
 
-    if (!set_model && !json["device"].is_null()) {
-        auto d = json["device"];
-        if (d.is_number()) {
-            *model = kis_hton16((uint16_t) d.get<unsigned int>());
-            set_model = true;
-        }
-    }
+    // if (!set_model && !json["device"].is_null()) {
+    //     auto d = json["device"];
+    //     if (d.is_number()) {
+    //         *model = kis_hton16((uint16_t) d.get<unsigned int>());
+    //         set_model = true;
+    //     }
+    // }
 
-    if (!set_model) {
-        *model = 0x0000;
-    }
+    // if (!set_model) {
+    //     *model = 0x0000;
+    // }
 
-    // Set the local bit
-    bytes[0] |= 0x2;
+    // // Set the local bit
+    // bytes[0] |= 0x2;
 
-    return mac_addr(bytes, 6);
+    //return mac_addr(bytes, 6);
+    return json["mac_address"].get<std::string>();
 }
 
-bool kis_sensor_phy::json_to_rtl(nlohmann::json json, std::shared_ptr<kis_packet> packet) {
+bool Kis_GNUMAC_Phy::json_to_rtl(nlohmann::json json, std::shared_ptr<kis_packet> packet) {
     std::string err;
     std::string v;
 
@@ -206,70 +197,44 @@ bool kis_sensor_phy::json_to_rtl(nlohmann::json json, std::shared_ptr<kis_packet
     else if (channel_j.is_number()) 
         common->channel = fmt::format("{}", channel_j.get<int>());
 
-    auto freq_j = json["freq"];
-
-    if (!freq_j.is_number())
-        freq_j = json["freq1"];
-
-    if (!freq_j.is_number())
-        freq_j = json["freq2"];
-
-    if (freq_j.is_number() && freq_j.get<double>() != 0) {
-        common->freq_khz = freq_j.get<double>() * 1000;
-    }
-
-    // TODO extract l1info if no freq in json
-    // common->freq_khz = packet->freq_khz;
-
+    common->freq_khz = 433920;
     common->source = rtlmac;
     common->transmitter = rtlmac;
 
     std::shared_ptr<kis_tracked_device_base> basedev =
         devicetracker->update_common_device(common, common->source, this, packet,
                 (UCD_UPDATE_FREQUENCIES | UCD_UPDATE_PACKETS | UCD_UPDATE_LOCATION |
-                 UCD_UPDATE_SEENBY), "RF Sensor");
+                 UCD_UPDATE_SEENBY), "RTL433 Sensor");
 
-    kis_lock_guard<kis_mutex> lk(devicetracker->get_devicelist_mutex(), "sensor_json_to_rtl");
+    kis_lock_guard<kis_mutex> lk(devicetracker->get_devicelist_mutex(), "gnumac_json_to_rtl");
 
     std::string dn = "Sensor";
 
-    if (json["model"].is_string()) {
-        if (json["id"].is_string()) {
-            dn = fmt::format("{}-{}", munge_to_printable(json["model"]), 
-                    munge_to_printable(json["id"]));
-        } else if (json["id"].is_number()) {
-            dn = fmt::format("{}-{}", munge_to_printable(json["model"]), 
-                    json["id"].get<unsigned int>());
-        } else {
-            dn = munge_to_printable(json["model"]);
-        }
-    } else if (json["id"].is_string()) {
-        dn = munge_to_printable(json["id"]);
-    } else if (json["id"].is_number()) {
-        dn = fmt::format("{}", json["id"].get<unsigned int>());
+    if (!json["model"].is_null()) {
+        dn = munge_to_printable(json["model"]);
     }
 
-    basedev->set_manuf(sensor_manuf);
+    basedev->set_manuf(rtl_manuf);
 
     basedev->set_tracker_type_string(devicetracker->get_cached_devicetype("Sensor"));
     basedev->set_devicename(dn);
 
-    auto rtlholder = basedev->get_sub_as<tracker_element_map>(sensor_holder_id);
+    auto rtlholder = basedev->get_sub_as<tracker_element_map>(gnumac_holder_id);
     bool newrtl = false;
 
     if (rtlholder == NULL) {
         rtlholder =
-            std::make_shared<tracker_element_map>(sensor_holder_id);
+            std::make_shared<tracker_element_map>(gnumac_holder_id);
         basedev->insert(rtlholder);
         newrtl = true;
     }
 
     auto commondev =
-        rtlholder->get_sub_as<sensor_tracked_common>(sensor_common_id);
+        rtlholder->get_sub_as<gnumac_tracked_common>(gnumac_common_id);
 
     if (commondev == NULL) {
         commondev =
-            std::make_shared<sensor_tracked_common>(sensor_common_id);
+            std::make_shared<gnumac_tracked_common>(gnumac_common_id);
         rtlholder->insert(commondev);
 
         commondev->set_model(dn);
@@ -300,19 +265,13 @@ bool kis_sensor_phy::json_to_rtl(nlohmann::json json, std::shared_ptr<kis_packet
             commondev->set_rtlid("");
         }
 
-        commondev->set_subchannel("0");
+        commondev->set_rtlchannel("0");
     }
-
-    if (track_last_record) {
-        auto pkt_json = packet->fetch<kis_json_packinfo>(pack_comp_json);
-        commondev->set_lastrecord(pkt_json->json_string);
-    }
-
 
     if (channel_j.is_number())
-        commondev->set_subchannel(fmt::format("{}", channel_j.get<int>()));
+        commondev->set_rtlchannel(fmt::format("{}", channel_j.get<int>()));
     else if (channel_j.is_string())
-        commondev->set_subchannel(munge_to_printable(channel_j));
+        commondev->set_rtlchannel(munge_to_printable(channel_j));
     
 
     auto battery_j = json["battery"];
@@ -341,9 +300,6 @@ bool kis_sensor_phy::json_to_rtl(nlohmann::json json, std::shared_ptr<kis_packet
     if (is_thermometer(json))
         add_thermometer(json, rtlholder);
 
-    if (is_moisture(json))
-        add_moisture(json, rtlholder);
-
     if (is_weather_station(json))
         add_weather_station(json, rtlholder);
 
@@ -360,13 +316,13 @@ bool kis_sensor_phy::json_to_rtl(nlohmann::json json, std::shared_ptr<kis_packet
         add_lightning(json, rtlholder);
 
     if (newrtl && commondev != NULL) {
-        std::string info = "Detected new RF sensor device '" + commondev->get_model() + "'";
+        std::string info = "Detected new RTL433 RF device '" + commondev->get_model() + "'";
 
         if (commondev->get_rtlid() != "") 
             info += " ID " + commondev->get_rtlid();
 
-        if (commondev->get_subchannel() != "0")
-            info += " Channel " + commondev->get_subchannel();
+        if (commondev->get_rtlchannel() != "0")
+            info += " Channel " + commondev->get_rtlchannel();
 
         _MSG(info, MSGFLAG_INFO);
     }
@@ -374,7 +330,7 @@ bool kis_sensor_phy::json_to_rtl(nlohmann::json json, std::shared_ptr<kis_packet
     return true;
 }
 
-bool kis_sensor_phy::is_weather_station(nlohmann::json json) {
+bool Kis_GNUMAC_Phy::is_weather_station(nlohmann::json json) {
     if (!json["direction_deg"].is_null())
         return true;
 
@@ -393,12 +349,6 @@ bool kis_sensor_phy::is_weather_station(nlohmann::json json) {
     if (!json["rain"].is_null())
         return true;
 
-    if (!json["rain_mm"].is_null())
-        return true;
-
-    if (!json["rain_raw"].is_null())
-        return true;
-
     if (!json["uv_index"].is_null())
         return true;
 
@@ -408,7 +358,13 @@ bool kis_sensor_phy::is_weather_station(nlohmann::json json) {
     return false;
 }
 
-bool kis_sensor_phy::is_thermometer(nlohmann::json json) {
+bool Kis_GNUMAC_Phy::is_thermometer(nlohmann::json json) {
+    if (!json["humidity"].is_null())
+        return true;
+
+    if (!json["moisture"].is_null())
+        return true;
+
     if (!json["temperature_F"].is_null())
         return true;
 
@@ -418,7 +374,7 @@ bool kis_sensor_phy::is_thermometer(nlohmann::json json) {
     return false;
 }
 
-bool kis_sensor_phy::is_tpms(nlohmann::json json) {
+bool Kis_GNUMAC_Phy::is_tpms(nlohmann::json json) {
     try {
         return json["type"] == "TPMS";
 
@@ -429,7 +385,7 @@ bool kis_sensor_phy::is_tpms(nlohmann::json json) {
     return false;
 }
 
-bool kis_sensor_phy::is_switch(nlohmann::json json) {
+bool Kis_GNUMAC_Phy::is_switch(nlohmann::json json) {
     if (!json["switch0"].is_null())
         return true;
 
@@ -457,7 +413,7 @@ bool kis_sensor_phy::is_switch(nlohmann::json json) {
     return false;
 }
 
-bool kis_sensor_phy::is_insteon(nlohmann::json json) {
+bool Kis_GNUMAC_Phy::is_insteon(nlohmann::json json) {
     if (!json["from_id"].is_null())
         return true;
 
@@ -479,7 +435,7 @@ bool kis_sensor_phy::is_insteon(nlohmann::json json) {
     return false;
 }
 
-bool kis_sensor_phy::is_lightning(nlohmann::json json) {
+bool Kis_GNUMAC_Phy::is_lightning(nlohmann::json json) {
     if (!json["strike_count"].is_null())
         return true;
 
@@ -492,30 +448,20 @@ bool kis_sensor_phy::is_lightning(nlohmann::json json) {
     if (!json["rfi"].is_null())
         return true;
 
-    return false;
+    return true;
 }
 
-bool kis_sensor_phy::is_moisture(nlohmann::json json) {
-    if (!json["moisture"].is_null())
-        return true;
-
-    if (!json["humidity"].is_null())
-        return true;
-
-    return false;
-}
-
-void kis_sensor_phy::add_weather_station(nlohmann::json json, 
+void Kis_GNUMAC_Phy::add_weather_station(nlohmann::json json, 
         std::shared_ptr<tracker_element_map> rtlholder) {
     auto uv_index_j = json["uv_index"];
     auto lux_j = json["lux"];
 
     auto weatherdev = 
-        rtlholder->get_sub_as<sensor_tracked_weatherstation>(sensor_weatherstation_id);
+        rtlholder->get_sub_as<gnumac_tracked_weatherstation>(gnumac_weatherstation_id);
 
     if (weatherdev == nullptr) {
         weatherdev = 
-            std::make_shared<sensor_tracked_weatherstation>(sensor_weatherstation_id);
+            std::make_shared<gnumac_tracked_weatherstation>(gnumac_weatherstation_id);
         rtlholder->insert(weatherdev);
     }
 
@@ -549,21 +495,9 @@ void kis_sensor_phy::add_weather_station(nlohmann::json json,
         weatherdev->get_wind_gust_rrd()->add_sample(json["gust"], Globalreg::globalreg->last_tv_sec);
     } catch (...) { }
 
-    if (json["rain"].is_number()) {
-        try {
-            weatherdev->set_rain(json["rain"]);
-            weatherdev->get_rain_rrd()->add_sample(json["rain"], Globalreg::globalreg->last_tv_sec);
-        } catch (...) { }
-    } else if (json["rain_mm"].is_number()) {
-        try {
-            weatherdev->set_rain(json["rain_mm"]);
-            weatherdev->get_rain_rrd()->add_sample(json["rain_mm"], 
-                    Globalreg::globalreg->last_tv_sec);
-        } catch (...) { }
-    }
-
     try {
-        weatherdev->set_rain(json["rain_raw"]);
+        weatherdev->set_rain(json["rain"]);
+        weatherdev->get_rain_rrd()->add_sample(json["rain"], Globalreg::globalreg->last_tv_sec);
     } catch (...) { }
 
     try {
@@ -578,18 +512,26 @@ void kis_sensor_phy::add_weather_station(nlohmann::json json,
 
 }
 
-void kis_sensor_phy::add_thermometer(nlohmann::json json, std::shared_ptr<tracker_element_map> rtlholder) {
+void Kis_GNUMAC_Phy::add_thermometer(nlohmann::json json, std::shared_ptr<tracker_element_map> rtlholder) {
     auto thermdev = 
-        rtlholder->get_sub_as<sensor_tracked_thermometer>(sensor_thermometer_id);
+        rtlholder->get_sub_as<gnumac_tracked_thermometer>(gnumac_thermometer_id);
 
     if (thermdev == NULL) {
         thermdev = 
-            std::make_shared<sensor_tracked_thermometer>(sensor_thermometer_id);
+            std::make_shared<gnumac_tracked_thermometer>(gnumac_thermometer_id);
         rtlholder->insert(thermdev);
     }
 
     try {
-        thermdev->set_temperature(f_to_c(json["temperature_F"]));
+        thermdev->set_humidity(json["humidity"]);
+    } catch (...) { }
+
+    try {
+        thermdev->set_humidity(json["moisture"]);
+    } catch (...) { }
+
+    try {
+        thermdev->set_temperature(json["temperature_F"]);
     } catch (...) { }
 
     try {
@@ -598,43 +540,15 @@ void kis_sensor_phy::add_thermometer(nlohmann::json json, std::shared_ptr<tracke
 
 }
 
-void kis_sensor_phy::add_tpms(nlohmann::json json, std::shared_ptr<tracker_element_map> rtlholder) {
-    //{"time" : "2023-06-12 11:16:48", "model" : "Schrader-EG53MA4", "type" : "TPMS", "flags" : "4d930078", "id" : "891932", "pressure_kPa" : 220.000, "temperature_F" : 103.000, "mic" : "CHECKSUM", "mod" : "ASK", "freq" : 314.931, "rssi" : -2.296, "snr" : 6.350, "noise" : -8.646}
-    //{"time" : "2023-06-12 20:30:58", "model" : "Toyota", "type" : "TPMS", "id" : "da22b333", "status" : 128, "pressure_PSI" : 30.250, "temperature_C" : 20.000, "mic" : "CRC", "mod" : "FSK", "freq1" : 315.009, "freq2" : 314.962, "rssi" : -6.950, "snr" : 26.163, "noise" : -33.113} 
+void Kis_GNUMAC_Phy::add_tpms(nlohmann::json json, std::shared_ptr<tracker_element_map> rtlholder) {
     auto tpmsdev = 
-        rtlholder->get_sub_as<sensor_tracked_tpms>(sensor_tpms_id);
+        rtlholder->get_sub_as<gnumac_tracked_tpms>(gnumac_tpms_id);
 
     if (tpmsdev == NULL) {
         tpmsdev = 
-            std::make_shared<sensor_tracked_tpms>(sensor_tpms_id);
+            std::make_shared<gnumac_tracked_tpms>(gnumac_tpms_id);
         rtlholder->insert(tpmsdev);
     }
-
-    /* handled in common 
-    try {
-        tpmsdev->set_freq(json["freq"]);
-    } catch (...) { }
-
-    try {
-        tpmsdev->set_freq(json["freq1"]);
-    } catch (...) { }
-
-    try {
-        tpmsdev->set_freq(json["freq2"]);
-    } catch (...) { }
-    */
-
-    try {
-        tpmsdev->set_temperature(f_to_c(json["temperature_F"]));
-    } catch (...) { }
-
-    try {
-        tpmsdev->set_temperature(json["temperature_C"]);
-    } catch (...) { }
-
-    try {
-        tpmsdev->set_pressure_psi(json["pressure_PSI"]);
-    } catch (...) { }
 
     try {
         tpmsdev->set_pressure_bar(json["pressure_bar"]);
@@ -662,15 +576,15 @@ void kis_sensor_phy::add_tpms(nlohmann::json json, std::shared_ptr<tracker_eleme
 
 }
 
-void kis_sensor_phy::add_switch(nlohmann::json json, std::shared_ptr<tracker_element_map> rtlholder) {
+void Kis_GNUMAC_Phy::add_switch(nlohmann::json json, std::shared_ptr<tracker_element_map> rtlholder) {
     //{"time" : "2021-08-18 16:16:54", "model" : "Interlogix-Security", "subtype" : "contact", "id" : "a55b4b", "battery_ok" : 1, "switch1" : "OPEN", "switch2" : "OPEN", "switch3" : "OPEN", "switch4" : "OPEN", "switch5" : "OPEN", "raw_message" : "2dd4ac"}
 
     auto switchdev = 
-        rtlholder->get_sub_as<sensor_tracked_switch>(sensor_switch_id);
+        rtlholder->get_sub_as<gnumac_tracked_switch>(gnumac_switch_id);
 
     if (switchdev == nullptr) {
         switchdev = 
-            std::make_shared<sensor_tracked_switch>(sensor_switch_id);
+            std::make_shared<gnumac_tracked_switch>(gnumac_switch_id);
         rtlholder->insert(switchdev);
     }
 
@@ -691,7 +605,7 @@ void kis_sensor_phy::add_switch(nlohmann::json json, std::shared_ptr<tracker_ele
     } catch (...) { }
 
     try {
-        switchdev->set_switch5(munge_to_printable(json["switch5"]));
+        switchdev->set_switch1(munge_to_printable(json["switch5"]));
     } catch (...) { }
 
     /*
@@ -704,15 +618,15 @@ void kis_sensor_phy::add_switch(nlohmann::json json, std::shared_ptr<tracker_ele
     
 }
 
-void kis_sensor_phy::add_insteon(nlohmann::json json, std::shared_ptr<tracker_element_map> rtlholder) {
+void Kis_GNUMAC_Phy::add_insteon(nlohmann::json json, std::shared_ptr<tracker_element_map> rtlholder) {
     //{"time" : "2021-08-19 18:52:48", "model" : "Insteon", "from_id" : "CCFF79", "to_id" : "9F39E6", "msg_type" : 7, "msg_str" : "NAK of Group Cleanup Direct Message", "extended" : 0, "hopsmax" : 3, "hopsleft" : 0, "formatted" : "E3 : 9F39E6 : CCFF79 : 39 E7  B7", "mic" : "CRC", "payload" : "E3E6399F79FFCC39E7B7", "cmd_dat" : [57, 231], "mod" : "FSK", "freq1" : 914.909, "freq2" : 915.069, "rssi" : -0.212, "snr" : 25.305, "noise" : -25.517}
     
     auto insteondev =
-            rtlholder->get_sub_as<sensor_tracked_insteon>(sensor_insteon_id);
+            rtlholder->get_sub_as<gnumac_tracked_insteon>(gnumac_insteon_id);
 
     if (insteondev == NULL) {
         insteondev =
-            std::make_shared<sensor_tracked_insteon>(sensor_insteon_id);
+            std::make_shared<gnumac_tracked_insteon>(gnumac_insteon_id);
         rtlholder->insert(insteondev);
     }
 
@@ -742,15 +656,15 @@ void kis_sensor_phy::add_insteon(nlohmann::json json, std::shared_ptr<tracker_el
 }
 
 
-void kis_sensor_phy::add_lightning(nlohmann::json json, std::shared_ptr<tracker_element_map> rtlholder) {
+void Kis_GNUMAC_Phy::add_lightning(nlohmann::json json, std::shared_ptr<tracker_element_map> rtlholder) {
     // {"time" : "2019-02-24 22:12:13", "model" : "Acurite Lightning 6045M", "id" : 15580, "channel" : "B", "temperature_F" : 38.300, "humidity" : 53, "strike_count" : 1, "storm_dist" : 8, "active" : 1, "rfi" : 0, "ussb1" : 0, "battery" : "OK", "exception" : 0, "raw_msg" : "bcdc6f354edb81886e"}
     
     auto lightningdev = 
-        rtlholder->get_sub_as<sensor_tracked_lightningsensor>(sensor_lightning_id);
+        rtlholder->get_sub_as<gnumac_tracked_lightningsensor>(gnumac_lightning_id);
 
     if (lightningdev == NULL) {
         lightningdev = 
-            std::make_shared<sensor_tracked_lightningsensor>(sensor_lightning_id);
+            std::make_shared<gnumac_tracked_lightningsensor>(gnumac_lightning_id);
         rtlholder->insert(lightningdev);
     }
 
@@ -772,43 +686,17 @@ void kis_sensor_phy::add_lightning(nlohmann::json json, std::shared_ptr<tracker_
 
 }
 
-void kis_sensor_phy::add_moisture(nlohmann::json json, std::shared_ptr<tracker_element_map> rtlholder) {
-    auto mdev = 
-        rtlholder->get_sub_as<sensor_tracked_moisture>(sensor_moisture_id);
-
-    if (mdev == nullptr) {
-        mdev = 
-            std::make_shared<sensor_tracked_moisture>(sensor_moisture_id);
-        rtlholder->insert(mdev);
-    }
-
-    if (json["moisture"].is_number()) {
-        try {
-            mdev->set_moisture(json["moisture"]);
-            mdev->get_moisture_rrd()->add_sample(json["moisture"], Globalreg::globalreg->last_tv_sec);
-        } catch (...) { }
-    }
-
-    if (json["humidity"].is_number()) {
-        try {
-            mdev->set_moisture(json["humidity"]);
-            mdev->get_moisture_rrd()->add_sample(json["humidity"], Globalreg::globalreg->last_tv_sec);
-        } catch (...) { }
-    }
-
-}
-
-int kis_sensor_phy::packet_handler(CHAINCALL_PARMS) {
-    kis_sensor_phy *sensor = (kis_sensor_phy *) auxdata;
+int Kis_GNUMAC_Phy::PacketHandler(CHAINCALL_PARMS) {
+    Kis_GNUMAC_Phy *gnumac = (Kis_GNUMAC_Phy *) auxdata;
 
     if (in_pack->error || in_pack->filtered || in_pack->duplicate)
         return 0;
 
-    auto json = in_pack->fetch<kis_json_packinfo>(sensor->pack_comp_json);
+    auto json = in_pack->fetch<kis_json_packinfo>(gnumac->pack_comp_json);
     if (json == NULL)
         return 0;
 
-    if ((json->type != "RTL433") & (json->type != "Gnumac"))
+    if (json->type != "Gnumac")
         return 0;
 
     std::stringstream ss(json->json_string);
@@ -817,23 +705,15 @@ int kis_sensor_phy::packet_handler(CHAINCALL_PARMS) {
     try {
         ss >> device_json;
 
-        // Manually exclude other phys that also use rtl433 data
-        if(json->type == "RTL433")
-            if (kis_meter_phy::is_meter(device_json))
-                return 0;
-
-        // _MSG_DEBUG("RTL433 data: {}", json->json_string);
-
         // Copy the JSON as the meta field for logging, if it's valid
-        if (sensor->json_to_rtl(device_json, in_pack)) {
-            auto metablob = in_pack->fetch<packet_metablob>(sensor->pack_comp_meta);
+        if (gnumac->json_to_rtl(device_json, in_pack)) {
+            auto metablob = in_pack->fetch<packet_metablob>(gnumac->pack_comp_meta);
             if (metablob == nullptr) {
-                metablob = std::make_shared<packet_metablob>("sensor", json->json_string);
-                in_pack->insert(sensor->pack_comp_meta, metablob);
+                metablob = std::make_shared<packet_metablob>("Gnumac", json->json_string);
+                in_pack->insert(gnumac->pack_comp_meta, metablob);
             }
         }
     } catch (std::exception& e) {
-        _MSG_DEBUG("RTL json error: {}", e.what());
         // fprintf(stderr, "debug - error processing rtl json %s\n", e.what());
         return 0;
     }

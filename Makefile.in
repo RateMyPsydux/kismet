@@ -116,6 +116,9 @@ BUILD_CAPTURE_SDR_RTLAMR = @BUILD_CAPTURE_SDR_RTLAMR@
 CAPTURE_SDR_RTLADSB = capture_sdr_rtladsb/kismet_cap_sdr_rtladsb
 BUILD_CAPTURE_SDR_RTLADSB = @BUILD_CAPTURE_SDR_RTLADSB@
 
+CAPTURE_SDR_GNUMAC = capture_sdr_gnumac/kismet_cap_sdr_gnumac
+BUILD_CAPTURE_SDR_GNUMAC = @BUILD_CAPTURE_SDR_GNUMAC@
+
 CAPTURE_BT_GEIGER = capture_bt_geiger/kismet_cap_bt_geiger
 BUILD_CAPTURE_BT_GEIGER = @BUILD_CAPTURE_BT_GEIGER@
 
@@ -218,7 +221,7 @@ PSO	= util.cc.o crc32.cc.o macaddr.cc.o uuid.cc.o xxhash.cc.o boost_like_hash.cc
 	ipctracker_v2.cc.o \
 	$(PROTOBUF_CPP_O_TARGET) kis_external.cc.o \
 	dlttracker.cc.o antennatracker.cc.o datasourcetracker.cc.o kis_datasource.cc.o \
-	datasource_linux_bluetooth.cc.o datasource_rtl433.cc.o datasource_rtlamr.cc.o datasource_rtladsb.cc.o \
+	datasource_linux_bluetooth.cc.o datasource_rtl433.cc.o datasource_rtlamr.cc.o datasource_rtladsb.cc.o datasource_gnumac.cc.o \
 	datasource_ti_cc_2540.cc.o datasource_ti_cc_2531.cc.o datasource_ubertooth_one.cc.o datasource_nrf_51822.cc.o \
 	datasource_nxp_kw41z.cc.o datasource_nrf_52840.cc.o datasource_rz_killerbee.cc.o datasource_scan.cc.o \
 	datasource_bt_geiger.cc.o \
@@ -239,7 +242,7 @@ PSO	= util.cc.o crc32.cc.o macaddr.cc.o uuid.cc.o xxhash.cc.o boost_like_hash.cc
 	kaitaistream.cc.o \
 	$(PARSERS) \
 	phy_80211.cc.o phy_80211_components.cc.o phy_80211_dissectors.cc.o \
-	phy_sensor.cc.o phy_meter.cc.o phy_adsb.cc.o phy_zwave.cc.o \
+	phy_sensor.cc.o phy_meter.cc.o phy_adsb.cc.o phy_gnumac.cc.o phy_zwave.cc.o \
 	phy_bluetooth.cc.o phy_uav_drone.cc.o phy_nrf_mousejack.cc.o phy_btle.cc.o phy_802154.cc.o \
 	phy_80211_ssidtracker.cc.o phy_radiation.cc.o \
 	kis_dissector_ipdata.cc.o \
@@ -347,6 +350,9 @@ $(CAPTURE_SDR_RTLAMR): FORCE
 
 $(CAPTURE_SDR_RTLADSB): FORCE
 	(cd capture_sdr_rtladsb && $(MAKE))
+
+$(CAPTURE_SDR_GNUMAC): FORCE
+	(cd capture_sdr_gnumac && $(MAKE))
 
 $(CAPTURE_BT_GEIGER): FORCE
 	(cd capture_bt_geiger && $(MAKE))
@@ -552,6 +558,10 @@ commoninstall: $(INSTBINS)
 		(cd capture_sdr_rtladsb && $(MAKE) install) \
 	fi;
 
+	@if test "$(BUILD_CAPTURE_SDR_GNUMAC)"x = "1"x; then \
+		(cd capture_sdr_gnumac && $(MAKE) install) \
+	fi;
+
 	@if test "$(BUILD_CAPTURE_BT_GEIGER)"x = "1"x; then \
 		(cd capture_bt_geiger && $(MAKE) install) \
 	fi;
@@ -743,6 +753,7 @@ clean: all-plugins-clean depclean
 	@(cd capture_sdr_rtl433 && make clean)
 	@(cd capture_sdr_rtlamr && make clean)
 	@(cd capture_sdr_rtladsb && make clean)
+	@(cd capture_sdr_gnumac && make clean)
 	@(cd capture_nrf_mousejack && make clean)
 	@(cd capture_ti_cc_2540 && make clean)
 	@(cd capture_ti_cc_2531 && make clean)

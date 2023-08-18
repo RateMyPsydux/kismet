@@ -17,7 +17,7 @@ AC_PREREQ(2.57)
 AC_CANONICAL_HOST
 
 # Checks for programs.
-AC_PROG_CC
+AC_PROG_CC_STDC
 AC_PROG_CXX
 AC_PROG_INSTALL
 AC_PROG_MAKE_SET
@@ -45,6 +45,7 @@ BUILD_CAPTURE_NXP_KW41Z=0
 BUILD_CAPTURE_RZ_KILLERBEE=0
 BUILD_CAPTURE_BLADERF_WLAN=0
 BUILD_CAPTURE_PROXY_ADSB=1
+BUILD_CAPTURE_SDR_GNUMAC=1
 BUILD_CAPTURE_NRF_52840=0
 BUILD_CAPTURE_HAK5_COCONUT=0
 
@@ -196,23 +197,17 @@ else
 fi
 
 # Start at the newest C++ and define our way back
-AX_CXX_COMPILE_STDCXX(20, , [optional])
-if test "$HAVE_CXX20" = "1"; then
-    AC_DEFINE(HAVE_CXX20, 1, [cpp20 available])
+AX_CXX_COMPILE_STDCXX(17, , [optional])
+if test "$HAVE_CXX17" = "1"; then
     AC_DEFINE(HAVE_CXX17, 1, [cpp17 available])
     AC_DEFINE(HAVE_CXX14, 1, [cpp14 available])
     AC_DEFINE(HAVE_CXX11, 1, [cpp11 available])
 else
-    AX_CXX_COMPILE_STDCXX(17, , [mandatory])
-    AC_DEFINE(HAVE_CXX17, 1, [cpp17 available])
-    AC_DEFINE(HAVE_CXX14, 1, [cpp14 available])
-    AC_DEFINE(HAVE_CXX11, 1, [cpp11 available])
-# else
-#     AX_CXX_COMPILE_STDCXX(14, ,[mandatory])
-#     if test "$HAVE_CXX14" = "1"; then
-#         AC_DEFINE(HAVE_CXX14, 1, [cpp14 available])
-#         AC_DEFINE(HAVE_CXX11, 1, [cpp11 available])
-#     fi
+    AX_CXX_COMPILE_STDCXX(14, ,[mandatory])
+    if test "$HAVE_CXX14" = "1"; then
+        AC_DEFINE(HAVE_CXX14, 1, [cpp14 available])
+        AC_DEFINE(HAVE_CXX11, 1, [cpp11 available])
+    fi
 fi
 
 AC_SUBST(PLUGINLDFLAGS)
@@ -932,19 +927,6 @@ AC_ARG_ENABLE(pcre,
 	[wantpcre=yes]
 )
 
-AC_ARG_ENABLE(require-pcre2,
-    AS_HELP_STRING([--enable-require-pcre2], [Explicitly require libpcre2]),
-	[case "${enableval}" in
-	  yes) needpcre2=yes ;;
-	    *) needpcre2=no ;;
-	 esac],
-	[needpcre2=no]
-)
-
-if test "${wantpcre}x" = "nox" -a "${needpcre2}x" = "yesx"; then
-    AC_MSG_ERROR([Can not combine --disable-pcre and --enable-require-pcre2])
-fi
-
 if test "$caponly" == 0; then
     if test "$HAVE_CXX17" = "1"; then
 	    AC_MSG_CHECKING([Checking C++17 parallel functions])
@@ -1052,10 +1034,6 @@ if test "$caponly" == 0; then
         LIBS="$OLIBS"
 
         if test "$pcre2" != "yes"; then
-            if test "${needpcre2}x" == "yesx"; then
-                AC_MSG_ERROR([Could not find libpcre2 and --enable-require-pcre2 selected])
-            fi
-
     	    AC_CHECK_LIB([pcre], [pcre_compile], pcre1=yes, pcre1=no)
 
             if test "$pcre1" == "yes"; then
@@ -1616,10 +1594,10 @@ want_coconut="no"
 AC_ARG_ENABLE([wifi-coconut],
     AS_HELP_STRING([--enable-wifi-coconut], [Enable Hak5 WiFi Coconut userspace]),
 	[case "${enableval}" in
-         yes) want_coconut=yes ;;
-           *) want_coconut=no ;;
+	  no) want_coconut=no ;;
+	   *) want_coconut=yes ;;
 	 esac],
-         [want_coconut=no]
+	[want_coconut=yes]
 )
 
 BUILD_CAPTURE_HAK5_COCONUT=0
@@ -1891,6 +1869,7 @@ AC_SUBST(BUILD_CAPTURE_UBERTOOTH_ONE)
 AC_SUBST(BUILD_CAPTURE_NRF_51822)
 AC_SUBST(BUILD_CAPTURE_NXP_KW41Z)
 AC_SUBST(BUILD_CAPTURE_PROXY_ADSB)
+AC_SUBST(BUILD_CAPTURE_SDR_GNUMAC)
 AC_SUBST(BUILD_CAPTURE_RZ_KILLERBEE)
 AC_SUBST(BUILD_CAPTURE_NRF_52840)
 AC_SUBST(BUILD_CAPTURE_HAK5_COCONUT)
@@ -1924,6 +1903,7 @@ AC_CONFIG_FILES([
     capture_proxy_adsb/Makefile
     capture_nrf_52840/Makefile
     capture_hak5_wifi_coconut/Makefile
+    capture_sdr_gnumac/Makefile
     ])
 AC_OUTPUT
 
@@ -2098,6 +2078,13 @@ else
         echo "no (python modules are disabled)";
 fi
 
+printf "       RTL-SDR GNUMAC: "
+if test "$BUILD_CAPTURE_SDR_GNUMAC" = 1; then
+        echo "yes";
+else
+        echo "no (python modules are disabled)";
+fi
+
 printf "    BTLE Geiger Sensor: "
 if test "$BUILD_CAPTURE_BT_GEIGER" = 1; then
         echo "yes";
@@ -2123,14 +2110,14 @@ printf "         bladeRF-wiphy: "
 if test "$BUILD_CAPTURE_BLADERF_WLAN" = 1; then
 	echo "yes";
 else
-	echo "no (bladeRF support not explicitly enabled)";
+	echo "no (bladeRF support not enabled)";
 fi
 
 printf "     Hak5 WiFi Coconut: "
 if test "$BUILD_CAPTURE_HAK5_COCONUT" = 1; then
 	echo "yes";
 else
-	echo "no (Hak5 WiFi Coconut not explicitly enabled)";
+	echo "no (Hak5 WiFi Coconut support not enabled)";
 fi
 
 printf " lm-sensors monitoring: "
