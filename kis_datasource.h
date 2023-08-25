@@ -491,8 +491,6 @@ public:
     virtual void clear_device_gps();
 
 protected:
-    std::shared_ptr<gps_tracker> gpstracker;
-
     // Mutex for data elements
     kis_mutex data_mutex;
 

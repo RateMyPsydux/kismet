@@ -43,7 +43,7 @@
 #include "nlohmann/json.hpp"
 #include "kis_mutex.h"
 #include "macaddr.h"
-#include "unordered_dense.h"
+#include "robin_hood.h"
 #include "uuid.h"
 
 class entry_tracker;
@@ -77,7 +77,7 @@ public:
     // deserialization and rest queries; it's fairly expensive otherwise
     device_key(std::string in_keystr);
 
-    std::string as_string();
+    std::string as_string() const;
 
     // Generate a cached phykey component; phyhandlers do this to cache
     static uint32_t gen_pkey(std::string in_phy);
@@ -269,7 +269,7 @@ public:
         return false;
     } 
 
-    virtual std::string as_string() {
+    virtual std::string as_string() const {
         return "";
     }
 
@@ -394,7 +394,7 @@ public:
         return alias_element->is_stringable();
     }
 
-    virtual std::string as_string() override {
+    virtual std::string as_string() const override {
         return alias_element->as_string();
     }
 
@@ -554,7 +554,7 @@ public:
         return true;
     }
 
-    virtual std::string as_string() override {
+    virtual std::string as_string() const override {
         return value;
     }
 
@@ -611,7 +611,7 @@ public:
         return r;
     }
 
-    virtual std::string as_string() override {
+    virtual std::string as_string() const override {
         return to_hex();
     }
 
@@ -716,7 +716,7 @@ public:
         return true;
     }
 
-    virtual std::string as_string() override {
+    virtual std::string as_string() const override {
         return value.as_string();
     }
 
@@ -775,7 +775,7 @@ public:
         return true;
     }
 
-    virtual std::string as_string() override {
+    virtual std::string as_string() const override {
         return value.as_string();
     }
 
@@ -831,7 +831,7 @@ public:
         return true;
     }
 
-    virtual std::string as_string() override {
+    virtual std::string as_string() const override {
         return value.as_string();
     }
 
@@ -895,7 +895,7 @@ public:
         return true;
     }
 
-    virtual std::string as_string() override {
+    virtual std::string as_string() const override {
         struct in_addr addr;
         char buf[32];
         addr.s_addr = value;
@@ -968,7 +968,7 @@ public:
         return true;
     }
 
-    virtual std::string as_string() override {
+    virtual std::string as_string() const override {
         S s;
         return s.as_string(value);
     }
@@ -1166,7 +1166,7 @@ using tracker_element_int64 = tracker_element_core_numeric<int64_t, tracker_type
 template<class N>
 class float_numerical_string {
 public:
-    virtual std::string as_string(const N v) {
+    virtual std::string as_string(N v) const {
         if (std::isnan(v) || std::isinf(v))
             return "0";
 
@@ -1236,7 +1236,7 @@ public:
         return false;
     }
 
-    virtual std::string as_string() override {
+    virtual std::string as_string() const override {
         return "";
     }
 
@@ -1367,16 +1367,16 @@ protected:
 };
 
 // Dictionary / map-by-id
-class tracker_element_map : public tracker_element_core_map<ankerl::unordered_dense::map<uint16_t, std::shared_ptr<tracker_element>>, uint16_t, std::shared_ptr<tracker_element>, tracker_type::tracker_map> {
+class tracker_element_map : public tracker_element_core_map<robin_hood::unordered_node_map<uint16_t, std::shared_ptr<tracker_element>>, uint16_t, std::shared_ptr<tracker_element>, tracker_type::tracker_map> {
 public:
     tracker_element_map() :
-        tracker_element_core_map<ankerl::unordered_dense::map<uint16_t, std::shared_ptr<tracker_element>>, uint16_t, std::shared_ptr<tracker_element>, tracker_type::tracker_map>() { }
+        tracker_element_core_map<robin_hood::unordered_node_map<uint16_t, std::shared_ptr<tracker_element>>, uint16_t, std::shared_ptr<tracker_element>, tracker_type::tracker_map>() { }
 
     tracker_element_map(int id) :
-        tracker_element_core_map<ankerl::unordered_dense::map<uint16_t, std::shared_ptr<tracker_element>>, uint16_t, std::shared_ptr<tracker_element>, tracker_type::tracker_map>(id) { }
+        tracker_element_core_map<robin_hood::unordered_node_map<uint16_t, std::shared_ptr<tracker_element>>, uint16_t, std::shared_ptr<tracker_element>, tracker_type::tracker_map>(id) { }
 
     tracker_element_map(const tracker_element_map *p) :
-        tracker_element_core_map<ankerl::unordered_dense::map<uint16_t, std::shared_ptr<tracker_element>>, uint16_t, std::shared_ptr<tracker_element>, tracker_type::tracker_map>(p) { }
+        tracker_element_core_map<robin_hood::unordered_node_map<uint16_t, std::shared_ptr<tracker_element>>, uint16_t, std::shared_ptr<tracker_element>, tracker_type::tracker_map>(p) { }
 
     shared_tracker_element get_sub(int id) {
         auto v = map.find(id);
@@ -1456,29 +1456,29 @@ public:
 };
 
 // int::element
-using tracker_element_int_map = tracker_element_core_map<ankerl::unordered_dense::map<int, std::shared_ptr<tracker_element>>, int, std::shared_ptr<tracker_element>, tracker_type::tracker_int_map>;
+using tracker_element_int_map = tracker_element_core_map<robin_hood::unordered_node_map<int, std::shared_ptr<tracker_element>>, int, std::shared_ptr<tracker_element>, tracker_type::tracker_int_map>;
 
 // hash::element
-using tracker_element_hashkey_map = tracker_element_core_map<ankerl::unordered_dense::map<size_t, std::shared_ptr<tracker_element>>, size_t, std::shared_ptr<tracker_element>, tracker_type::tracker_hashkey_map>;
+using tracker_element_hashkey_map = tracker_element_core_map<robin_hood::unordered_node_map<size_t, std::shared_ptr<tracker_element>>, size_t, std::shared_ptr<tracker_element>, tracker_type::tracker_hashkey_map>;
 
 // double::element
-using tracker_element_double_map = tracker_element_core_map<ankerl::unordered_dense::map<double, std::shared_ptr<tracker_element>>, double, std::shared_ptr<tracker_element>, tracker_type::tracker_double_map>;
+using tracker_element_double_map = tracker_element_core_map<robin_hood::unordered_node_map<double, std::shared_ptr<tracker_element>>, double, std::shared_ptr<tracker_element>, tracker_type::tracker_double_map>;
 
 // mac::element, keyed as *unordered*, does not allow mask operations.  for generating mac maps which allow
 // masks, use tracker_element_macfilter_map
-using tracker_element_mac_map = tracker_element_core_map<ankerl::unordered_dense::map<mac_addr, std::shared_ptr<tracker_element>>, mac_addr, std::shared_ptr<tracker_element>, tracker_type::tracker_mac_map>;
+using tracker_element_mac_map = tracker_element_core_map<robin_hood::unordered_node_map<mac_addr, std::shared_ptr<tracker_element>>, mac_addr, std::shared_ptr<tracker_element>, tracker_type::tracker_mac_map>;
 using tracker_element_macfilter_map = tracker_element_core_map<std::map<mac_addr, std::shared_ptr<tracker_element>>, mac_addr, std::shared_ptr<tracker_element>, tracker_type::tracker_mac_map>;
 
 // string::element
-using tracker_element_string_map = tracker_element_core_map<ankerl::unordered_dense::map<std::string, std::shared_ptr<tracker_element>>, std::string, std::shared_ptr<tracker_element>, tracker_type::tracker_string_map>;
+using tracker_element_string_map = tracker_element_core_map<robin_hood::unordered_node_map<std::string, std::shared_ptr<tracker_element>>, std::string, std::shared_ptr<tracker_element>, tracker_type::tracker_string_map>;
 
 // devicekey::element
-using tracker_element_device_key_map = tracker_element_core_map<ankerl::unordered_dense::map<device_key, std::shared_ptr<tracker_element>>, device_key, std::shared_ptr<tracker_element>, tracker_type::tracker_key_map>;
+using tracker_element_device_key_map = tracker_element_core_map<robin_hood::unordered_node_map<device_key, std::shared_ptr<tracker_element>>, device_key, std::shared_ptr<tracker_element>, tracker_type::tracker_key_map>;
 
-using tracker_element_uuid_map = tracker_element_core_map<ankerl::unordered_dense::map<uuid, std::shared_ptr<tracker_element>>, uuid, std::shared_ptr<tracker_element>, tracker_type::tracker_uuid_map>;
+using tracker_element_uuid_map = tracker_element_core_map<robin_hood::unordered_node_map<uuid, std::shared_ptr<tracker_element>>, uuid, std::shared_ptr<tracker_element>, tracker_type::tracker_uuid_map>;
 
 // double::double
-using tracker_element_double_map_double = tracker_element_core_map<ankerl::unordered_dense::map<double, double>, double, double, tracker_type::tracker_double_map_double>;
+using tracker_element_double_map_double = tracker_element_core_map<robin_hood::unordered_node_map<double, double>, double, double, tracker_type::tracker_double_map_double>;
 
 // Core vector
 template<typename T, tracker_type TT>
@@ -1533,7 +1533,7 @@ public:
         return false;
     }
 
-    virtual std::string as_string() override {
+    virtual std::string as_string() const override {
         return "";
     }
 
@@ -1686,7 +1686,7 @@ public:
         return false;
     }
 
-    virtual std::string as_string() override {
+    virtual std::string as_string() const override {
         return "";
     }
 

@@ -181,6 +181,7 @@ bool kis_meter_phy::rtlamr_json_to_phy(nlohmann::json json, std::shared_ptr<kis_
         basedev->set_manuf(meter_manuf);
 
         basedev->set_tracker_type_string(devicetracker->get_cached_devicetype("Meter"));
+        basedev->set_devicename(fmt::format("{}", id_j.get<unsigned int>()));
 
         basedev->insert(meterdev);
 
@@ -207,12 +208,10 @@ bool kis_meter_phy::rtlamr_json_to_phy(nlohmann::json json, std::shared_ptr<kis_
                 basedev->set_tracker_type_string(devicetracker->get_cached_devicetype("Water Meter"));
                 break;
             default:
-                meterdev->set_meter_type("Meter");
+                meterdev->set_meter_type("Unknown");
                 basedev->set_tracker_type_string(devicetracker->get_cached_devicetype("Meter"));
                 break;
         }
-
-        basedev->set_devicename(fmt::format("{}-{}", meterdev->get_meter_type(), id_j.get<unsigned int>()));
 
         _MSG_INFO("Detected new AMR {} id {}",
                 basedev->get_type_string(), meterdev->get_meter_id());
@@ -437,6 +436,7 @@ bool kis_meter_phy::rtl433_json_to_phy(nlohmann::json json, std::shared_ptr<kis_
         basedev->set_manuf(meter_manuf);
 
         basedev->set_tracker_type_string(devicetracker->get_cached_devicetype("Meter"));
+        basedev->set_devicename(fmt::format("{}", decoded_id));
 
         basedev->insert(meterdev);
 
@@ -453,11 +453,9 @@ bool kis_meter_phy::rtl433_json_to_phy(nlohmann::json json, std::shared_ptr<kis_
             meterdev->set_meter_type("Water");
             basedev->set_tracker_type_string(devicetracker->get_cached_devicetype("Water Meter"));
         } else { 
-            meterdev->set_meter_type("Meter");
+            meterdev->set_meter_type("Unknown");
             basedev->set_tracker_type_string(devicetracker->get_cached_devicetype("Meter"));
         }
-
-        basedev->set_devicename(fmt::format("{}-{}", meterdev->get_meter_type(), decoded_id));
 
         _MSG_INFO("Detected new meter {} id {}",
                 basedev->get_type_string(), meterdev->get_meter_id());

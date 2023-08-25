@@ -66,29 +66,19 @@ std::string multi_replace_all(const std::string& in, const std::string& match, c
     return work;
 }
 
-nlohmann::json transform_json(const nlohmann::json &json) {
-    nlohmann::json ret;
-
+void transform_json(nlohmann::json &json) {
     try {
-        if (json.is_object()) {
-            for (auto k : json.items()) {
-                auto repl = multi_replace_all(k.key(), ".", "_");
+        for (auto k : json.items()) {
+            auto repl = multi_replace_all(k.key(), ".", "_");
 
-                ret[repl] = transform_json(k.value());
-            }
-
-            return ret;
-        } 
-
-        if (json.is_array()) {
-            for (auto v : json)
-                ret.push_back(transform_json(v));
-            return ret;
+            json[repl] = k.value();
+            json.erase(k);
         }
 
-        return json;
+        for (auto v : json)
+            transform_json(v);
     } catch (...) {
-        return json;
+        return;
     }
 }
 
@@ -289,7 +279,7 @@ int main(int argc, char *argv[]) {
             ss >> parsed_json;
 
             if (reformat)
-                parsed_json = transform_json(parsed_json);
+                transform_json(parsed_json);
 
             if (newline) {
                 if (!ekjson) {

@@ -41,7 +41,7 @@
 #include "kis_mutex.h"
 #include "kis_net_beast_httpd.h"
 #include "objectpool.h"
-#include "unordered_dense.h"
+#include "robin_hood.h"
 #include "timetracker.h"
 #include "trackedelement.h"
 #include "trackedrrd.h"
@@ -257,7 +257,7 @@ protected:
     // Packet & data component pools
     shared_object_pool<kis_packet> packet_pool;
 
-    ankerl::unordered_dense::map<size_t, std::shared_ptr<void>> component_pool_map;
+    robin_hood::unordered_map<size_t, std::shared_ptr<void>> component_pool_map;
 
     // Unique lock for packet number and dedupe
     kis_shared_mutex pack_no_mutex;

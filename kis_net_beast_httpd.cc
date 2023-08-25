@@ -49,8 +49,7 @@ std::shared_ptr<kis_net_beast_httpd> kis_net_beast_httpd::create_httpd() {
     try {
        bind_address = boost::asio::ip::make_address(httpd_interface);
     } catch (const std::exception& e) {
-        _MSG_FATAL("Invalid bind address {} for httpd server; expected interface address: {}", 
-                httpd_interface,  e.what());
+        _MSG_FATAL("Invalid bind address {} for httpd server; expected interface address: {}", e.what());
         Globalreg::globalreg->fatal_condition = 1;
         return nullptr;
     }
@@ -941,7 +940,7 @@ void kis_net_beast_httpd::store_auth() {
         return;
     }
 
-    fmt::print(sf, "{}", ((nlohmann::json) vec).dump());
+    fmt::print(sf, "{}", vec);
     fclose(sf);
 }
 

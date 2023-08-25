@@ -47,13 +47,8 @@
 #include "packet_ieee80211.h"
 #include "version.h"
 
-#ifdef HAVE_LIBPCRE1
+#ifdef HAVE_LIBPCRE
 #include <pcre.h>
-#endif
-
-#ifdef HAVE_LIBPCRE2
-#define PCRE2_CODE_UNIT_WIDTH 8
-#include <pcre2.h>
 #endif
 
 // Aggressive additional mangle of text to handle converting ',' and '"' to
@@ -204,7 +199,7 @@ int main(int argc, char *argv[]) {
     };
 
     struct pcre_filter {
-#if defined HAVE_LIBPCRE1
+#ifdef HAVE_LIBPCRE
         pcre_filter(const std::string& in_regex) {
             const char *compile_error, *study_error;
             int err_offt;
@@ -244,47 +239,6 @@ int main(int argc, char *argv[]) {
 
         pcre *re;
         pcre_extra *study;
-#elif defined HAVE_LIBPCRE2
-        pcre_filter(const std::string& in_regex) {
-            PCRE2_SIZE erroroffset;
-            int errornumber;
-
-            re = NULL;
-            match_data = NULL;
-
-            re = pcre2_compile((PCRE2_SPTR8) in_regex.c_str(),
-                    PCRE2_ZERO_TERMINATED, 0, &errornumber, &erroroffset, NULL);
-
-            if (re == nullptr) {
-                PCRE2_UCHAR buffer[256];
-                pcre2_get_error_message(errornumber, buffer, sizeof(buffer));
-                throw std::runtime_error(fmt::format("Could not parse PCRE regex: {} at {}",
-                            (int) erroroffset, (char *) buffer));
-            }
-        }
-
-        ~pcre_filter() {
-            if (match_data != nullptr)
-                pcre2_match_data_free(match_data);
-            if (re != nullptr)
-                pcre2_code_free(re);
-        }
-
-        bool match(const std::string& target) {
-            int rc;
-
-            rc = pcre2_match(re, (PCRE2_SPTR8) target.c_str(), target.length(),
-                    0, 0, match_data, NULL);
-
-            if (rc >= 0)
-                return true;
-
-            return false;
-        }
-
-        pcre2_code *re;
-        pcre2_match_data *match_data;
-
 #else
         pcre_filter(const std::string& in_regex) {}
         bool match(const std::string& target) {return false;}
@@ -354,7 +308,7 @@ int main(int argc, char *argv[]) {
 
             exclusion_zones.push_back(std::make_tuple(lat, lon, distance));
         } else if (r == 'F') {
-#if defined(HAVE_LIBPCRE1) == 0 && defined(HAVE_LIBPCRE2) == 0
+#ifndef HAVE_LIBPCRE
             fmt::print(stderr, "ERROR:  We were not compiled with libpcre support, so we "
                     "can't use regex filters.");
             exit(1);
@@ -725,7 +679,7 @@ int main(int argc, char *argv[]) {
 
                 device_cache_map[sourcemac] = cached;
 
-#if defined(HAVE_LIBPCRE1) || defined(HAVE_LIBPCRE2)
+#ifdef HAVE_LIBPCRE
                 for (const auto& i : pcre_list) {
                     if (i->match(name))
                         cached->filter(true);
