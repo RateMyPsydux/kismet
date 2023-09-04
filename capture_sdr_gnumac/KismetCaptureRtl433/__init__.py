@@ -60,6 +60,7 @@ class KismetRtl433(object):
         self.have_librtl = False
 
         self.driverid = "gnumac"
+        print("HELLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL")
         # Use ctypes to load librtlsdr and probe for supported USB devices
         try:
             self.rtllib = ctypes.CDLL("librtlsdr.so.0")
